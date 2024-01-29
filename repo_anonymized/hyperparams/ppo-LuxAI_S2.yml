@@ -1,0 +1,997 @@
+LuxAI_S2-v0: &lux-defaults
+  n_timesteps: !!float 40e6
+  additional_keys_to_log: ["stats", "results"]
+  env_id: LuxAI_S2-v0
+  env_hyperparams: &lux-env-defaults
+    env_type: lux
+    vec_env_class: sync
+    n_envs: 24
+    self_play_kwargs: &lux-env-self-play
+      num_old_policies: 12
+      save_steps: 300000
+      swap_steps: 3000
+      swap_window_size: 4
+      window: 33
+    make_kwargs: &lux-env-make-defaults
+      bid_std_dev: 0
+      reward_weights:
+        ice_generation: 0.0025 # 0.5/day of water for factory, 0.05/heavy dig
+        ore_generation: 0.008 # 4/heavy robot build, 0.16/heavy dig
+        water_generation: 0.01 # 0.5/day of water for factory
+        metal_generation: 0.04 # 4/heavy robot build
+        power_generation: 0
+        ice_rubble_cleared: 0.002 # 80% of ice_generation
+        ore_rubble_cleared: 0.0064 # 80% of ore_generation
+        built_light: 0.1
+        built_heavy: 1
+        lost_factory: -1
+        factories_alive: 0.01
+        heavies_alive: 0.005 # 0.25/day of heavy alive
+        lights_alive: 0.0005 # 0.025/day of light alive
+    additional_win_loss_reward: true
+    score_reward_kwargs:
+      episode_end: true
+  eval_hyperparams: &lux-eval-defaults
+    deterministic: false
+    step_freq: !!float 5e6
+    score_function: mean
+    only_record_video_on_best: true
+    score_threshold: 0.37
+    env_overrides: &lux-eval-env-overrides
+      n_envs: 64
+      self_play_kwargs: null
+      make_kwargs: &lux-eval-env-override-make-kwargs
+        <<: *lux-env-make-defaults
+        reward_weights:
+          win_loss: 1
+      additional_win_loss_reward: false
+      score_reward_kwargs: null
+      self_play_reference_kwargs:
+        window: 32
+  policy_hyperparams: &lux-policy-defaults
+    activation_fn: relu
+    actor_head_style: unet
+    v_hidden_sizes: [256, 128]
+    embed_layer: false
+    additional_critic_activation_functions: [tanh, identity]
+    subaction_mask:
+      1:
+        2: 0
+        3: 1
+        4: 1
+        5: 2
+  hyperparam_transitions_kwargs: &lux-transitions-defaults
+    phases:
+      - multi_reward_weights: [0.98, 0.01, 0.01] # Initial shaped rewards (mostly)
+        vf_coef: [0.5, 0.1, 0.1]
+        ent_coef: 0.01
+        learning_rate: !!float 1e-4
+      - multi_reward_weights: [0.34, 0.33, 0.33] # Equal contributions
+        vf_coef: [0.25, 0.25, 0.25]
+        ent_coef: 0.01
+        learning_rate: !!float 1e-4
+      - multi_reward_weights: [0, 0.9, 0.1] # Win-loss sparse rewards
+        vf_coef: [0, 0.4, 0.2]
+        ent_coef: 0.001
+        learning_rate: !!float 5e-5
+    durations:
+      - 0.3
+      - 0.2
+      - 0.2
+      - 0.2
+      - 0.1
+  rollout_hyperparams: &lux-rollout-defaults
+    n_steps: 384
+    full_batch_off_accelerator: true
+  algo_hyperparams: &lux-algo-defaults
+    batch_size: 2304
+    n_epochs: 4
+    learning_rate_decay: none
+    ent_coef: 0.01
+    max_grad_norm: 0.5
+    clip_range: 0.1
+    clip_range_decay: none
+    clip_range_vf: 0.1
+    ppo2_vf_coef_halving: true
+    multi_reward_weights: [0.99, 0.01]
+    gamma: [0.99, 0.999, 0.999]
+    gae_lambda: [0.95, 0.99, 0.99]
+    vf_coef: [0.5, 0.1, 0.1]
+
+LuxAI_S2-v0-double-cone: &lux-dc-defaults
+  <<: *lux-defaults
+  policy_hyperparams: &lux-dc-policy
+    actor_head_style: double_cone
+    pooled_channels: 128
+    additional_critic_activation_functions: [tanh, identity]
+    subaction_mask:
+      1:
+        2: 0
+        3: 1
+        4: 1
+        5: 2
+  rollout_hyperparams: &lux-dc-rollout-defaults
+    <<: *lux-rollout-defaults
+    n_steps: 128
+  algo_hyperparams: &lux-dc-algo-defaults
+    <<: *lux-algo-defaults
+    batch_size: 768
+    n_epochs: 2
+
+LuxAI_S2-v0-eval:
+  <<: *lux-defaults
+  device: cpu
+  eval_hyperparams:
+    <<: *lux-eval-defaults
+    env_overrides:
+      n_envs: 1
+      self_play_kwargs:
+        save_steps: .inf
+        swap_steps: .inf
+      make_kwargs:
+        <<: *lux-env-make-defaults
+        reward_weights:
+          win_loss: 1
+
+LuxAI_S2-v0-A10: &lux-a10-defaults
+  <<: *lux-defaults
+  rollout_hyperparams:
+    n_steps: 192
+  algo_hyperparams:
+    <<: *lux-algo-defaults
+    batch_size: 1152
+
+LuxAI_S2-v0-A10-100M:
+  <<: *lux-a10-defaults
+  n_timesteps: !!float 100e6
+
+LuxAI_S2-v0-dc-A10: &lux-dc-a10-defaults
+  <<: *lux-dc-defaults
+  rollout_hyperparams:
+    <<: *lux-dc-rollout-defaults
+    n_steps: 64
+  algo_hyperparams:
+    <<: *lux-dc-algo-defaults
+    batch_size: 256
+    gradient_accumulation: true
+
+LuxAI_S2-v0-medium-transfer: &lux-medium-transfer-defaults
+  <<: *lux-a10-defaults
+  policy_hyperparams:
+    <<: *lux-policy-defaults
+    load_run_path: repo_anonymized-benchmarks/qpm5k6n1
+    load_run_path_best: false
+
+LuxAI_S2-v0-medium-transfer-debug:
+  <<: *lux-medium-transfer-defaults
+  device: cpu
+  env_hyperparams:
+    <<: *lux-env-defaults
+    vec_env_class: sync
+    make_kwargs:
+      <<: *lux-env-make-defaults
+      verbose: 2
+  hyperparam_transitions_kwargs:
+    <<: *lux-transitions-defaults
+    durations:
+      - 0 # Should already know water generation, so transition to sparse rewards
+      - 0.3
+      - 0.2
+      - 0.2
+      - 0.3
+
+LuxAI_S2-v0-medium-transfer-A100:
+  <<: *lux-medium-transfer-defaults
+  algo_hyperparams:
+    <<: *lux-algo-defaults
+
+LuxAI_S2-v0-small: &small-lux-defaults
+  <<: *lux-defaults
+  env_hyperparams: &small-lux-env-defaults
+    <<: *lux-env-defaults
+    make_kwargs:
+      <<: *lux-env-make-defaults
+      map_size: 16
+      MIN_FACTORIES: 1
+      MAX_FACTORIES: 1
+  eval_hyperparams:
+    <<: *lux-eval-defaults
+    env_overrides:
+      <<: *lux-eval-env-overrides
+      make_kwargs:
+        <<: *lux-eval-env-override-make-kwargs
+        map_size: 16
+        MIN_FACTORIES: 1
+        MAX_FACTORIES: 1
+
+LuxAI_S2-v0-small-debug:
+  <<: *small-lux-defaults
+  device: cpu
+  env_hyperparams:
+    <<: *small-lux-env-defaults
+    vec_env_class: sync
+
+LuxAI_S2-v0-medium: &medium-lux-defaults
+  <<: *lux-defaults
+  n_timesteps: !!float 30e6
+  env_hyperparams: &medium-lux-env-defaults
+    <<: *lux-env-defaults
+    make_kwargs:
+      <<: *lux-env-make-defaults
+      map_size: 32
+      MIN_FACTORIES: 1
+      MAX_FACTORIES: 1
+  eval_hyperparams:
+    <<: *lux-eval-defaults
+    env_overrides:
+      <<: *lux-eval-env-overrides
+      make_kwargs:
+        <<: *lux-eval-env-override-make-kwargs
+        map_size: 32
+        MIN_FACTORIES: 1
+        MAX_FACTORIES: 1
+
+LuxAI_S2-v0-medium-debug:
+  <<: *medium-lux-defaults
+  device: cpu
+  env_hyperparams:
+    <<: *medium-lux-env-defaults
+    vec_env_class: sync
+
+LuxAI_S2-v0-squnet: &lux-squnet
+  <<: *lux-defaults
+  policy_hyperparams: &lux-squnet-policy
+    actor_head_style: squeeze_unet
+    subaction_mask:
+      1:
+        2: 0
+        3: 1
+        4: 1
+        5: 2
+    channels_per_level: [128, 128, 128]
+    strides_per_level: [4, 4]
+    deconv_strides_per_level: [[2, 2], [2, 2]]
+    encoder_residual_blocks_per_level: [3, 2, 4]
+    decoder_residual_blocks_per_level: [2, 3]
+    additional_critic_activation_functions: [tanh, identity]
+  rollout_hyperparams: &lux-squnet-rollout
+    <<: *lux-rollout-defaults
+    n_steps: 64
+    full_batch_off_accelerator: true
+  algo_hyperparams: &lux-squnet-algo
+    <<: *lux-algo-defaults
+    batch_size: 384
+    n_epochs: 2
+    gradient_accumulation: true
+
+LuxAI_S2-v0-squnet-iDeimos: &lux-squnet-ideimos
+  <<: *lux-squnet
+  n_timesteps: !!float 50e6
+  env_hyperparams: &lux-squnet-ideimos-env
+    <<: *lux-env-defaults
+    make_kwargs: &lux-squnet-ideimos-env-make-kwargs
+      <<: *lux-env-make-defaults
+      reward_weights:
+        score_vs_opponent: 1
+      factory_ice_distance_buffer: null
+    additional_win_loss_reward: true
+    score_reward_kwargs: null
+    self_play_kwargs: &lux-squnet-ideimos-env-self-play
+      <<: *lux-env-self-play
+      save_steps: !!float 1e6
+      window: 50
+  eval_hyperparams: &lux-squnet-ideimos-eval
+    <<: *lux-eval-defaults
+    env_overrides: &lux-squnet-ideimos-eval-env-overrides
+      <<: *lux-eval-env-overrides
+      make_kwargs: &lux-squnet-ideimos-eval-env-make-kwargs
+        <<: *lux-eval-env-override-make-kwargs
+        factory_ice_distance_buffer: null
+  policy_hyperparams: &lux-squnet-ideimos-policy
+    <<: *lux-squnet-policy
+    additional_critic_activation_functions: [tanh]
+    output_activation_fn: tanh
+    load_run_path: repo_anonymized-lux-nips1/qil1np82
+  algo_hyperparams: &lux-squnet-ideimos-algo
+    <<: *lux-squnet-algo
+    multi_reward_weights: [0.1, 0.9]
+    gamma: [0.9997, 0.9997]
+    gae_lambda: [0.99, 0.99]
+    vf_coef: [0.1, 0.4]
+    learning_rate: !!float 1e-4
+    ent_coef: 0.01
+  hyperparam_transitions_kwargs: &lux-squnet-ideimos-hyperparam-transitions
+    interpolate_method: cosine
+    phases:
+      - ent_coef: 0
+        learning_rate: !!float 1e-5
+        freeze_policy_head: true
+        freeze_backbone: true
+      - ent_coef: 0
+        learning_rate: !!float 5e-5
+        freeze_policy_head: true
+        freeze_backbone: true
+      - ent_coef: 0.001
+        learning_rate: !!float 1e-5
+        freeze_policy_head: false
+        freeze_backbone: false
+      - ent_coef: 0.001
+        learning_rate: !!float 5e-5
+        freeze_policy_head: false
+        freeze_backbone: false
+      - ent_coef: 0.0001
+        learning_rate: !!float 1e-5
+        freeze_policy_head: false
+        freeze_backbone: false
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0
+      - 0
+      - 0.1
+      - 0.4
+      - 0.3
+      - 0.1
+
+LuxAI_S2-v0-squnet-Deimos-jumpstart: &lux-squnet-deimos-jumpstart
+  <<: *lux-squnet-ideimos
+  rollout_type: guided
+  rollout_hyperparams:
+    <<: *lux-squnet-rollout
+    switch_range: 1
+  eval_hyperparams: &lux-squnet-deimos-jumpstart-eval
+    <<: *lux-squnet-ideimos-eval
+    score_threshold: null
+    only_checkpoint_initial_policy: true
+    env_overrides:
+      <<: *lux-squnet-ideimos-eval-env-overrides
+      self_play_reference_kwargs:
+        window: 1
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 3e-5
+        ent_coef: 0
+        freeze_policy_head: true
+        freeze_backbone: true
+        switch_range: 1
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        switch_range: 1000
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        switch_range: 1000
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        switch_range: 1
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        freeze_policy_head: false
+        freeze_backbone: false
+        switch_range: 1
+    durations:
+      - 0.02
+      - 0
+      - 0
+      - 0.23
+      - 0
+      - 0.4
+      - 0.1
+      - 0.23
+      - 0.02
+
+LuxAI_S2-v0-squnet-Deimos-guided-random: &lux-squnet-guided-random
+  <<: *lux-squnet-ideimos
+  rollout_type: guided_random
+  rollout_hyperparams: &lux-squnet-guided-random-rollout
+    <<: *lux-squnet-rollout
+    guide_probability: 0
+  eval_hyperparams:
+    <<: *lux-squnet-deimos-jumpstart-eval
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 3e-5
+        ent_coef: 0
+        freeze_policy_head: true
+        freeze_backbone: true
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        guide_probability: 0.9
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        guide_probability: 0.6
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        freeze_policy_head: false
+        freeze_backbone: false
+        guide_probability: 0
+    durations:
+      - 0.02
+      - 0
+      - 0
+      - 0.23
+      - 0
+      - 0.3
+      - 0.2
+      - 0.23
+      - 0.02
+
+LuxAI_S2-v0-squnet-Deimos-guided-random-fast: &lux-squnet-guided-random-fast
+  <<: *lux-squnet-guided-random
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 3e-5
+        ent_coef: 0
+        freeze_policy_head: true
+        freeze_backbone: true
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        guide_probability: 0.9
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+        freeze_policy_head: false
+        freeze_backbone: false
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        freeze_policy_head: false
+        freeze_backbone: false
+        guide_probability: 0
+    durations:
+      - 0.02
+      - 0
+      - 0
+      - 0.1
+      - 0.63
+      - 0.23
+      - 0.02
+
+LuxAI_S2-v0-squnet-Deimos-adv-norm-gfast: &lux-squnet-adv-norm-gfast
+  <<: *lux-squnet-guided-random-fast
+  algo_hyperparams: &lux-squnet-adv-norm-gfast-algo
+    <<: *lux-squnet-ideimos-algo
+    normalize_advantages_after_scaling: true
+
+LuxAI_S2-v0-split-squnet-Deimos: &lux-split-squnet-deimos
+  <<: *lux-squnet-adv-norm-gfast
+  policy_hyperparams: &lux-split-squnet-deimos-policy
+    <<: *lux-squnet-ideimos-policy
+    critic_shares_backbone: false
+    load_run_path: repo_anonymized-lux-nips1/66vbe7z3
+
+LuxAI_S2-v0-split-squnet-multi: &lux-split-squnet-multi
+  <<: *lux-split-squnet-deimos
+  policy_hyperparams:
+    <<: *lux-split-squnet-deimos-policy
+    load_run_path: repo_anonymized-lux-nips1/ntwvs6bc
+
+LuxAI_S2-v0-split-short-squnet-multi: &lux-split-short-squnet-multi
+  <<: *lux-split-squnet-multi
+  policy_hyperparams: &lux-split-short-squnet-multi-policy
+    <<: *lux-split-squnet-deimos-policy
+    encoder_residual_blocks_per_level: [2, 2, 4]
+    decoder_residual_blocks_per_level: [2, 2]
+    load_run_path: repo_anonymized-lux-nips1/ze7acdpc
+
+LuxAI_S2-v0-split-short-squnet-acbc-robot: &lux-split-short-squnet-acbc-robot
+  <<: *lux-squnet-adv-norm-gfast
+  env_hyperparams: &lux-split-short-squnet-acbc-robot-env
+    <<: *lux-squnet-ideimos-env
+    make_kwargs: &lux-split-short-squnet-acbc-robot-env-make-kwargs
+      <<: *lux-squnet-ideimos-env-make-kwargs
+      reward_weights:
+        built_light_by_time_remaining: 0.008
+        built_heavy_by_time_remaining: 0.12
+    score_reward_kwargs:
+      episode_end: true
+  policy_hyperparams: &lux-split-short-squnet-acbc-robot-policy
+    <<: *lux-split-short-squnet-multi-policy
+    additional_critic_activation_functions: [tanh, tanh]
+    output_activation_fn: identity
+    load_run_path: repo_anonymized-lux-nips1/oupuah7y
+    save_critic_separate: true
+  algo_hyperparams: &lux-split-short-squnet-acbc-robot-algo
+    <<: *lux-squnet-adv-norm-gfast-algo
+    multi_reward_weights: [0.1, 0.8, 0.1]
+    gamma: [0.9997, 0.9997, 0.9997]
+    gae_lambda: [0.95, 0.95, 0.95]
+    vf_coef: [0.33, 0.33, 0.33]
+
+LuxAI_S2-v0-ss-squnet-acbc-robot-rollout-reset:
+  &lux-ss-squnet-acbc-robot-rollout-reset
+  <<: *lux-split-short-squnet-acbc-robot
+  env_hyperparams: &lux-ss-squnet-acbc-robot-rollout-reset-env
+    <<: *lux-split-short-squnet-acbc-robot-env
+    n_envs: 24
+  rollout_hyperparams: &lux-ss-squnet-acbc-robot-rollout-reset-rollout
+    <<: *lux-squnet-guided-random-rollout
+    num_envs_reset_every_rollout: 2
+
+LuxAI_S2-v0-ss-squnet-rl-robot-no-guidance: &lux-ss-squnet-rl-robot-no-guidance
+  <<: *lux-ss-squnet-acbc-robot-rollout-reset
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+    durations:
+      - 0
+      - 0.1
+      - 0.7
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-ss-squnet-rl-robot-half-guidance:
+  &lux-ss-squnet-rl-robot-half-guidance
+  <<: *lux-ss-squnet-rl-robot-no-guidance
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 3e-5
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.1
+      - 0.6
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-ss-squnet-ray: &lux-ss-squnet-ray
+  <<: *lux-ss-squnet-rl-robot-half-guidance
+  env_hyperparams: &lux-ss-squnet-ray-env
+    <<: *lux-ss-squnet-acbc-robot-rollout-reset-env
+    vec_env_class: ray
+
+LuxAI_S2-v0-short-squnet-rl-robot: &lux-short-squnet-rl-robot
+  <<: *lux-ss-squnet-ray
+  policy_hyperparams: &lux-short-squnet-rl-robot-policy
+    <<: *lux-split-short-squnet-acbc-robot-policy
+    save_critic_separate: false
+    critic_shares_backbone: true
+    load_run_path: repo_anonymized-lux-nips1/gtt6hr2c
+  algo_hyperparams: &lux-short-squnet-rl-robot-algo
+    <<: *lux-split-short-squnet-acbc-robot-algo
+    vf_coef: [0.2, 0.2, 0.2]
+
+LuxAI_S2-v0-short-squnet-cuda-opt: &lux-short-squnet-cuda-opt
+  <<: *lux-short-squnet-rl-robot
+  device_hyperparams:
+    set_float32_matmul_precision: high
+  algo_hyperparams: &lux-short-squnet-cuda-opt-algo
+    <<: *lux-short-squnet-rl-robot-algo
+    autocast_loss: true
+    batch_size: 768
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1.5e-5
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1.5e-5
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.1
+      - 0.6
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-short-squnet-48-envs: &lux-short-squnet-48-envs
+  <<: *lux-short-squnet-cuda-opt
+  env_hyperparams: &lux-short-squnet-48-envs-env
+    <<: *lux-ss-squnet-ray-env
+    n_envs: 48
+    self_play_kwargs: &lux-short-squnet-48-envs-env-self-play
+      <<: *lux-squnet-ideimos-env-self-play
+      num_old_policies: 16
+      first_window_orig_policy: true
+  rollout_hyperparams: &lux-short-squnet-48-envs-rollout
+    <<: *lux-ss-squnet-acbc-robot-rollout-reset-rollout
+    num_envs_reset_every_rollout: 8
+
+LuxAI_S2-v0-short-squnet-78-envs: &lux-short-squnet-78-envs
+  <<: *lux-short-squnet-48-envs
+  env_hyperparams: &lux-short-squnet-78-envs-env
+    <<: *lux-short-squnet-48-envs-env
+    n_envs: 78
+    self_play_kwargs:
+      <<: *lux-short-squnet-48-envs-env-self-play
+      num_old_policies: 24
+      first_window_orig_policy: true
+      swap_window_size: 6
+  rollout_hyperparams:
+    <<: *lux-short-squnet-48-envs-rollout
+    num_envs_reset_every_rollout: 12
+  algo_hyperparams: &lux-short-squnet-78-envs-algo
+    <<: *lux-short-squnet-cuda-opt-algo
+    batch_size: 832
+    vf_coef: [0.16, 0.17, 0.16]
+  hyperparam_transitions_kwargs:
+    &lux-short-squnet-78-envs-hyperparam-transitions
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1e-5
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1e-5
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0.5
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-short-squnet-78-envs-deimos: &lux-short-squnet-78-envs-deimos
+  <<: *lux-short-squnet-78-envs
+  policy_hyperparams: &lux-short-squnet-78-envs-deimos-policy
+    <<: *lux-short-squnet-rl-robot-policy
+    load_run_path: repo_anonymized-lux-nips1/act6rrp0
+
+LuxAI_S2-v0-short-squnet-78-envs-multi: &lux-short-squnet-78-envs-multi
+  <<: *lux-short-squnet-78-envs
+  policy_hyperparams:
+    <<: *lux-short-squnet-rl-robot-policy
+    load_run_path: repo_anonymized-lux-nips1/i0s75uqy
+
+LuxAI_S2-v0-short-squnet-78-envs-deimos-robots:
+  &lux-short-squnet-78-envs-deimos-robots
+  <<: *lux-short-squnet-78-envs-deimos
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        multi_reward_weights: [0.45, 0.45, 0.1]
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1e-5
+        multi_reward_weights: [0.45, 0.45, 0.1]
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1e-5
+        multi_reward_weights: [0.45, 0.45, 0.1]
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-5
+        multi_reward_weights: [0.1, 0.8, 0.1]
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        multi_reward_weights: [0.1, 0.8, 0.1]
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0
+      - 0.5
+      - 0
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-short-squnet-78-envs-deimos-lighter-robots:
+  &lux-short-squnet-78-envs-deimos-lighter-robots
+  <<: *lux-short-squnet-78-envs-deimos-robots
+  env_hyperparams: &lux-short-squnet-78-envs-deimos-lighter-robots-env
+    <<: *lux-short-squnet-78-envs-env
+    make_kwargs: &lux-short-squnet-78-envs-deimos-lighter-robots-env-make-kwargs
+      <<: *lux-split-short-squnet-acbc-robot-env-make-kwargs
+      reward_weights:
+        built_light_by_time_remaining: 0.009
+        built_heavy_by_time_remaining: 0.11
+
+LuxAI_S2-v0-short-squnet-78-envs-deimos-old-adv-scale:
+  &lux-short-squnet-78-envs-deimos-old-adv-scale
+  <<: *lux-short-squnet-78-envs-deimos-lighter-robots
+  algo_hyperparams: &lux-short-squnet-78-envs-deimos-old-adv-scale-algo
+    <<: *lux-short-squnet-78-envs-algo
+    normalize_advantages_after_scaling: false
+
+LuxAI_S2-v0-sSqunet-78env-deimos-win-loss-smoothing:
+  &lux-ssqunet-78envs-deimos-win-loss-smoothing
+  <<: *lux-short-squnet-78-envs-deimos-old-adv-scale
+  env_hyperparams: &lux-ssqunet-78envs-deimos-win-loss-smoothing-env
+    <<: *lux-short-squnet-78-envs-deimos-lighter-robots-env
+    additional_win_loss_smoothing_factor: 0.9
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lower-vf: &lux-ssqunet-78envs-deimos-lower-vf
+  <<: *lux-ssqunet-78envs-deimos-win-loss-smoothing
+  algo_hyperparams: &lux-ssqunet-78envs-deimos-lower-vf-algo
+    <<: *lux-short-squnet-78-envs-deimos-old-adv-scale-algo
+    vf_coef: [0.1, 0.1, 0.1]
+
+LuxAI_S2-v0-sSqunet-78env-deimos-constant-robots-2:
+  &lux-ssqunet-78envs-deimos-constant-robots-2
+  <<: *lux-ssqunet-78envs-deimos-lower-vf
+  algo_hyperparams: &lux-ssqunet-78envs-deimos-constant-robots-2-algo
+    <<: *lux-ssqunet-78envs-deimos-lower-vf-algo
+    multi_reward_weights: [0.2, 0.7, 0.1]
+  hyperparam_transitions_kwargs:
+    <<: *lux-short-squnet-78-envs-hyperparam-transitions
+
+LuxAI_S2-v0-sSqunet-78env-deimos-constant-robots-3:
+  &lux-ssqunet-78envs-deimos-constant-robots-3
+  <<: *lux-ssqunet-78envs-deimos-constant-robots-2
+  algo_hyperparams: &lux-ssqunet-78envs-deimos-constant-robots-3-algo
+    <<: *lux-ssqunet-78envs-deimos-constant-robots-2-algo
+    multi_reward_weights: [0.3, 0.6, 0.1]
+
+LuxAI_S2-v0-sSqunet-78env-deimos-gamma-1: &lux-ssqunet-78envs-deimos-gamma-1
+  <<: *lux-ssqunet-78envs-deimos-constant-robots-3
+  algo_hyperparams: &lux-ssqunet-78envs-deimos-gamma-1-algo
+    <<: *lux-ssqunet-78envs-deimos-constant-robots-3-algo
+    gamma: [1, 1, 1]
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lower-lichen:
+  &lux-ssqunet-78envs-deimos-lower-lichen
+  <<: *lux-ssqunet-78envs-deimos-gamma-1
+  algo_hyperparams: &lux-ssqunet-78envs-deimos-lower-lichen-algo
+    <<: *lux-ssqunet-78envs-deimos-gamma-1-algo
+    multi_reward_weights: [0.25, 0.7, 0.05]
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lr2: &lux-ssqunet-78envs-deimos-high-lr2
+  <<: *lux-ssqunet-78envs-deimos-lower-lichen
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 2e-5
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 2e-5
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0.5
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lr4: &lux-ssqunet-78envs-deimos-high-lr4
+  <<: *lux-ssqunet-78envs-deimos-lower-lichen
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 4e-5
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 4e-5
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0.5
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lr8: &lux-ssqunet-78envs-deimos-high-lr8
+  <<: *lux-ssqunet-78envs-deimos-lower-lichen
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 8e-5
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 8e-5
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0.5
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lr16: &lux-ssqunet-78envs-deimos-high-lr16
+  <<: *lux-ssqunet-78envs-deimos-lower-lichen
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1.6e-4
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 1.6e-4
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0.5
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lrH: &lux-ssqunet-78envs-deimos-high-lrh
+  <<: *lux-ssqunet-78envs-deimos-lower-lichen
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 6e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 6e-6
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0.5
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-sSqunet-78env-deimos-lrQ: &lux-ssqunet-78envs-deimos-high-lrq
+  <<: *lux-ssqunet-78envs-deimos-lower-lichen
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 3e-6
+        ent_coef: 0.001
+        guide_probability: 0.5
+      - learning_rate: !!float 3e-6
+        ent_coef: 0.001
+        guide_probability: 0
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+        guide_probability: 0
+    durations:
+      - 0
+      - 0.1
+      - 0
+      - 0.2
+      - 0.5
+      - 0.18
+      - 0.02
+
+LuxAI_S2-v0-sSqunet-78env-multi-fine-tune: &lux-ssqunet-78envs-multi-fine-tune
+  <<: *lux-ssqunet-78envs-deimos-gamma-1
+  rollout_type: sync
+  rollout_hyperparams:
+    <<: *lux-squnet-rollout
+    num_envs_reset_every_rollout: 12
+  policy_hyperparams:
+    <<: *lux-short-squnet-78-envs-deimos-policy
+    load_run_path: repo_anonymized-lux-nips1/bwc9aold
+  hyperparam_transitions_kwargs:
+    interpolate_method: cosine
+    phases:
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.001
+      - learning_rate: !!float 1e-5
+        ent_coef: 0.001
+      - learning_rate: !!float 1e-6
+        ent_coef: 0.0001
+    durations:
+      - 0
+      - 0.1
+      - 0.55
+      - 0.3
+      - 0.05
+
+LuxAI_S2-agent: &lux-agent
+  <<: *lux-squnet-ideimos
+  device: cpu
+  policy_hyperparams:
+    <<: *lux-squnet-ideimos-policy
+    load_run_path: null
+    load_path: lux_models/acbc-LuxAI_S2-v0-squnet-iDeimos-S1
+  eval_hyperparams:
+    <<: *lux-eval-defaults
+    env_overrides:
+      <<: *lux-eval-env-overrides
+      n_envs: 1
+      vec_env_class: agent
+      self_play_kwargs:
+        save_steps: .inf
+        swap_steps: .inf
+
+LuxAI_S2-v0-debug:
+  <<: *lux-ssqunet-78envs-deimos-high-lr16
+  n_timesteps: !!float 1e6
+  device: mps
+  env_hyperparams:
+    <<: *lux-ssqunet-78envs-deimos-win-loss-smoothing-env
+    make_kwargs:
+      <<: *lux-short-squnet-78-envs-deimos-lighter-robots-env-make-kwargs
+      verbose: 3
+      verify: true

@@ -1,0 +1,15 @@
+name: repo_anonymized_311
+channels:
+  - pytorch
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - mamba
+  - pip
+  - pytorch
+  - torchvision
+  - torchaudio
+  - setuptools=65.5.0
+  - wheel=0.38.4
+  - build
