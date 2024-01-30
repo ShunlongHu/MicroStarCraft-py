@@ -1441,7 +1441,7 @@ MicroSc-squnet-d16-128-map64-BC-finetune:
       num_old_policies: 12
   policy_hyperparams:
     <<: *microsc-squnet-d16-128-imayari-policy
-    load_run_path: repo_anonymized-2023/uksp6znl
+#    load_run_path: repo_anonymized-2023/uksp6znl
   eval_hyperparams: &microsc-squnet-d16-128-map64-bc-finetune-eval
     <<: *microsc-squnet-map64-eval-defaults
   algo_hyperparams: &microsc-squnet-d16-128-map64-bc-finetune-algo

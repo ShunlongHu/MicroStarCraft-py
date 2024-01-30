@@ -15,7 +15,7 @@ def train() -> None:
     parser.add_argument(
         "--wandb-project-name",
         type=str,
-        default=None,
+        default="repo-anonymized",
         help="WandB project name to upload training data to. If none, won't upload.",
     )
     parser.add_argument(
