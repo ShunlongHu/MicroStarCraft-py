@@ -13,6 +13,7 @@ from gym.spaces.discrete import Discrete
 
 
 class VecEnvSc:
+    ENV_ID = 1
     def __init__(self, num_workers: int, device: torch.device,
                  seed: int,
                  isRotSym: bool,
@@ -21,11 +22,19 @@ class VecEnvSc:
                  expansionCnt: int,
                  clusterPerExpansion: int,
                  mineralPerCluster: int):
+        import os
+        self.obj = cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.realpath(__file__)), f"../cpp_lib/rts_engine_shared{VecEnvSc.ENV_ID}.dll"))
+        VecEnvSc.ENV_ID += 1
+        self.obj.Init.argtypes = [InitParam]
+        self.obj.Reset.argtypes = [c_int, c_bool, c_bool, c_double, c_int, c_int, c_int]
+        self.obj.Reset.restype = TotalObservation
+        self.obj.Step.argtypes = [TotalAction]
+        self.obj.Step.restype = TotalObservation
         self.unwrapped = self
         self.device = device
         self.num_workers = num_workers
         initParam = InitParam(c_int(GAME_W), c_int(GAME_H), c_int(self.num_workers))
-        obj.Init(initParam)
+        self.obj.Init(initParam)
         self.reward_weight1 = torch.tensor([0,           # GAME_TIME
                                0,           # IS_END
                                -1000,       # VICTORY_SIDE
@@ -67,7 +76,7 @@ class VecEnvSc:
         self.action_space = MultiDiscrete(np.array([ACTION_SIZE] * GAME_H * GAME_H).flatten().tolist())
 
     def reset(self) -> ((torch.tensor, torch.tensor), (torch.tensor, torch.tensor)):
-        totalObs = obj.Reset(self.seed, self.isRotSym, self.isAxSym, self.terrainProb, self.expansionCnt, self.clusterPerExpansion, self.mineralPerCluster)
+        totalObs = self.obj.Reset(self.seed, self.isRotSym, self.isAxSym, self.terrainProb, self.expansionCnt, self.clusterPerExpansion, self.mineralPerCluster)
         assert totalObs.ob1.size == self.num_workers * OBSERVATION_PLANE_NUM * GAME_H * GAME_W
         assert totalObs.ob2.size == self.num_workers * OBSERVATION_PLANE_NUM * GAME_H * GAME_W
         ob1 = torch.from_numpy(np.ctypeslib.as_array(totalObs.ob1.data, [self.num_workers, OBSERVATION_PLANE_NUM, GAME_H, GAME_W])).type(torch.FloatTensor)
@@ -90,7 +99,7 @@ class VecEnvSc:
         actionStruct1 = Action(actionObj1, c_int(actionData1.size(0)))
         actionStruct2 = Action(actionObj2, c_int(actionData2.size(0)))
 
-        totalObs = obj.Step(TotalAction(actionStruct1, actionStruct2))
+        totalObs = self.obj.Step(TotalAction(actionStruct1, actionStruct2))
         assert totalObs.ob1.size == self.num_workers * OBSERVATION_PLANE_NUM * GAME_H * GAME_W
         assert totalObs.ob2.size == self.num_workers * OBSERVATION_PLANE_NUM * GAME_H * GAME_W
         ob1 = torch.from_numpy(np.ctypeslib.as_array(totalObs.ob1.data, [self.num_workers, OBSERVATION_PLANE_NUM, GAME_H, GAME_W])).type(torch.FloatTensor)

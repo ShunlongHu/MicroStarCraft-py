@@ -109,5 +109,5 @@ def make_micro_sc_env(config: Config,
         _, # self_play_reference_kwargs,
         _,  # additional_win_loss_smoothing_factor,
     ) = astuple(hparams)
-    vecEnv = VecEnvSc(n_envs, torch.device("cpu"), 0, False, True, 0, 5, 5, 100)
+    vecEnv = VecEnvSc(n_envs, torch.device("cuda" if torch.cuda.is_available() else "cpu"), 0, False, True, 0, 5, 5, 100)
     return VecEnvScRandom(vecEnv)

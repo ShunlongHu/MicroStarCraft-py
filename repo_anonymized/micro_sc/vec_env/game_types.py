@@ -141,12 +141,3 @@ class AIActionMask:
     PRODUCE_DIRECTION_PARAM_MASK = RETURN_PARAM_MASK + 4
     PRODUCE_TYPE_PARAM_MASK = PRODUCE_DIRECTION_PARAM_MASK + 4
     RELATIVE_ATTACK_POSITION_MASK = PRODUCE_TYPE_PARAM_MASK + 6
-
-
-import os
-obj = cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../cpp_lib/rts_engine_shared.dll"))
-obj.Init.argtypes = [InitParam]
-obj.Reset.argtypes = [c_int, c_bool, c_bool, c_double, c_int, c_int, c_int]
-obj.Reset.restype = TotalObservation
-obj.Step.argtypes = [TotalAction]
-obj.Step.restype = TotalObservation
