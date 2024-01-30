@@ -109,7 +109,7 @@ class VecEnvSc:
         ob1 = ob1.detach().to(self.device)
         ob2 = ob2.detach().to(self.device)
 
-        print("time = ", totalObs.ob1.reward[Reward.GAME_TIME])
+        # print("time = ", totalObs.ob1.reward[Reward.GAME_TIME])
         reTensor1 = torch.from_numpy(np.ctypeslib.as_array(totalObs.ob1.reward, [self.num_workers, REWARD_SIZE])).type(torch.FloatTensor)
         reTensor2 = torch.from_numpy(np.ctypeslib.as_array(totalObs.ob2.reward, [self.num_workers, REWARD_SIZE])).type(torch.FloatTensor)
         isEnd = reTensor1[:, Reward.IS_END].flatten()

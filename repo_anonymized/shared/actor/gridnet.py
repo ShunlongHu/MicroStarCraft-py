@@ -49,7 +49,7 @@ class GridnetDistribution(Distribution):
         self.action_vec = action_vec
 
         masks_per_position = masks["per_position"] if isinstance(masks, dict) else masks
-        masks_per_position = masks_per_position.view(-1, masks_per_position.shape[-1])
+        masks_per_position = masks_per_position.reshape(-1, masks_per_position.shape[-1])
         split_masks_per_position = torch.split(
             masks_per_position, action_vec.tolist(), dim=1
         )

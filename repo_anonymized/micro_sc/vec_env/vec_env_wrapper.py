@@ -33,9 +33,8 @@ import torch.nn.functional as F
 
 def sample(action: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     neg_inf = -1e6
-    permutedAction = action.permute(0, 2, 3, 1)
-    logits = torch.where(mask == 1, permutedAction, neg_inf)
-    resultantAction = torch.zeros([*permutedAction.size()[:-1], 0])
+    logits = torch.where(mask == 1, action, neg_inf)
+    resultantAction = torch.zeros([*action.size()[:-1], 0])
     lastDim = 0
     for i in ACTION_SIZE:
         dist = Categorical(logits=logits[:, :, :, lastDim:lastDim + i])
@@ -49,21 +48,28 @@ class VecEnvScRandom:
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
         self.action_plane_space = self.env.action_plane_space
+        self.num_envs = self.env.num_workers
 
     def reset(self):
         ob, masks = self.env.reset()
         self.isDone = torch.zeros(self.env.num_workers)
         self.opponentMask = masks[1].permute(0, 2, 3, 1)
-        return (ob[0], masks[0].permute(0, 2, 3, 1))
+        self.mask = masks[0].permute(0, 2, 3, 1) == 1
+        return ob[0].numpy()
 
     def step(self, actions):
-        randActions = torch.rand(actions.size())
+        actions = torch.from_numpy(actions.reshape(actions.shape[0], GAME_H, GAME_W, -1))
+        randActions = torch.rand([*actions.shape[:-1], sum(ACTION_SIZE)])
         result = sample(randActions, self.opponentMask)
-        obs, re, masks, isDone, t = self.env.step(actions.permute(0, 3, 1, 2), result.permute(0, 3, 1, 2))
+        obs, masks, re, isDone, t = self.env.step(actions.permute(0, 3, 1, 2), result.permute(0, 3, 1, 2))
         self.opponentMask = masks[1].permute(0, 2, 3, 1)
         reallyDone = torch.clamp_min_(isDone - self.isDone, 0)
         self.isDone = isDone
-        return obs[0], masks[0].permute(0, 2, 3, 1), re[0] * (1-reallyDone), reallyDone, {}
+        self.mask = masks[0].permute(0, 2, 3, 1) == 1
+        return obs[0].numpy(), (re[0] * (1-reallyDone)).tolist(), (reallyDone == 1).tolist(), {}
+
+    def get_action_mask(self):
+        return self.mask.numpy()
 
     def render(self):
         pass
@@ -109,5 +115,5 @@ def make_micro_sc_env(config: Config,
         _, # self_play_reference_kwargs,
         _,  # additional_win_loss_smoothing_factor,
     ) = astuple(hparams)
-    vecEnv = VecEnvSc(n_envs, torch.device("cuda" if torch.cuda.is_available() else "cpu"), 0, False, True, 0, 5, 5, 100)
+    vecEnv = VecEnvSc(n_envs, torch.device("cpu"), 0, False, True, 0, 5, 5, 100)
     return VecEnvScRandom(vecEnv)
