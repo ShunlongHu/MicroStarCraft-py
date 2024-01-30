@@ -181,16 +181,16 @@ def make_policy(
     **kwargs,
 ) -> Policy:
     policy = POLICIES[config.algo](env, **kwargs).to(device)
-    if not load_path and load_run_path:
-        import wandb
+    # if not load_path and load_run_path:
+    #     import wandb
 
-        api = wandb.Api()
-        _, _, load_path = load_player(
-            api, load_run_path, config.args, config.root_dir, load_run_path_best
-        )
-        assert load_path
-    if load_path:
-        policy.load(load_path)
+        # api = wandb.Api()
+        # _, _, load_path = load_player(
+        #     api, load_run_path, config.args, config.root_dir, load_run_path_best
+        # )
+        # assert load_path
+    # if load_path:
+    #     policy.load(load_path)
     return policy
 
 

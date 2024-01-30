@@ -1,5 +1,5 @@
 import time
-from game_types import *
+from repo_anonymized.micro_sc.vec_env.game_types import *
 import numpy as np
 import matplotlib
 matplotlib.use('TkAgg',force=True)
@@ -21,6 +21,7 @@ class VecEnvSc:
                  expansionCnt: int,
                  clusterPerExpansion: int,
                  mineralPerCluster: int):
+        self.unwrapped = self
         self.device = device
         self.num_workers = num_workers
         initParam = InitParam(c_int(GAME_W), c_int(GAME_H), c_int(self.num_workers))
@@ -61,8 +62,10 @@ class VecEnvSc:
         self.clusterPerExpansion = clusterPerExpansion
         self.mineralPerCluster = mineralPerCluster
 
-        self.observation_space = Box(low=-1.0, high=2.0, shape=(OBSERVATION_PLANE_NUM, GAME_H, GAME_W))
-        self.action_space = MultiDiscrete(ACTION_SIZE)
+        self.observation_space = Box(low=-1.0, high=1.0, shape=(OBSERVATION_PLANE_NUM, GAME_H, GAME_W))
+        self.action_plane_space = gym.spaces.MultiDiscrete(ACTION_SIZE)
+        self.action_space = MultiDiscrete(np.array([ACTION_SIZE] * GAME_H * GAME_H).flatten().tolist())
+
     def reset(self) -> ((torch.tensor, torch.tensor), (torch.tensor, torch.tensor)):
         totalObs = obj.Reset(self.seed, self.isRotSym, self.isAxSym, self.terrainProb, self.expansionCnt, self.clusterPerExpansion, self.mineralPerCluster)
         assert totalObs.ob1.size == self.num_workers * OBSERVATION_PLANE_NUM * GAME_H * GAME_W

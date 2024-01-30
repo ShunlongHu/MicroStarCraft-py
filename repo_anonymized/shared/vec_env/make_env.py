@@ -35,7 +35,7 @@ def make_env(
         from repo_anonymized.lux.vec_env.lux import make_lux_env
 
         make_env_fn = make_lux_env
-    elif hparams.env_type == "micro_sc":
+    elif hparams.env_type == "microsc":
         from repo_anonymized.micro_sc.vec_env.vec_env_wrapper import make_micro_sc_env
 
         make_env_fn = make_micro_sc_env

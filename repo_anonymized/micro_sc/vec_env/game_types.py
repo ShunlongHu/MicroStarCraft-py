@@ -143,7 +143,8 @@ class AIActionMask:
     RELATIVE_ATTACK_POSITION_MASK = PRODUCE_TYPE_PARAM_MASK + 6
 
 
-obj = cdll.LoadLibrary("D:/repo/repo_anonymized/repo_anonymized/micro_sc/cpp_lib/rts_engine_shared.dll")
+import os
+obj = cdll.LoadLibrary(os.path.join(os.path.dirname(os.path.realpath(__file__)), "../cpp_lib/rts_engine_shared.dll"))
 obj.Init.argtypes = [InitParam]
 obj.Reset.argtypes = [c_int, c_bool, c_bool, c_double, c_int, c_int, c_int]
 obj.Reset.restype = TotalObservation

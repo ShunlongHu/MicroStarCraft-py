@@ -75,7 +75,7 @@ def train(args: TrainArgs):
         )
         wandb.config.update(args)
 
-    tb_writer = SummaryWriter(config.tensorboard_summary_path)
+    tb_writer = SummaryWriter(config.tensorboard_summary_path.replace(':', '_'))
 
     set_seeds(args.seed, args.use_deterministic_algorithms)
 

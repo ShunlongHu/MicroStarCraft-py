@@ -45,6 +45,10 @@ def sample(action: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
 class VecEnvScRandom:
     def __init__(self, vecEnv: VecEnvSc):
         self.env = vecEnv
+        self.unwrapped = self.env
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        self.action_plane_space = self.env.action_plane_space
 
     def reset(self):
         ob, masks = self.env.reset()
