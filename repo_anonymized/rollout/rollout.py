@@ -152,7 +152,7 @@ def per_position_num_actions(
     num_actions = np.zeros(actions.shape[:-2], dtype=np.int32)
     m_idx = 0
     for idx, m_sz in enumerate(action_plane_space.nvec):
-        m = action_masks[..., m_idx : m_idx + m_sz].reshape(-1, actions.shape[1], m_sz)
+        m = action_masks[..., m_idx : m_idx + m_sz].reshape(*actions.shape[:-1], m_sz)
         if idx in subaction_mask:
             reference_index, value = subaction_mask[idx]
             m = np.where(
