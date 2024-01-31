@@ -42,19 +42,24 @@ def sample(action: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         lastDim += i
     return resultantAction
 class VecEnvScRandom:
-    def __init__(self, vecEnv: VecEnvSc):
+    def __init__(self, vecEnv: VecEnvSc, maxSteps):
         self.env = vecEnv
         self.unwrapped = self.env
         self.observation_space = self.env.observation_space
         self.action_space = self.env.action_space
         self.action_plane_space = self.env.action_plane_space
         self.num_envs = self.env.num_workers
+        self.metadata = {"semantics.async": False, "render_modes": ["rgb_array"]}
+        self.maxSteps = maxSteps
+        self.render_mode = 'rgb_array'
 
     def reset(self):
         ob, masks = self.env.reset()
         self.isDone = torch.zeros(self.env.num_workers)
         self.opponentMask = masks[1].permute(0, 2, 3, 1)
         self.mask = masks[0].permute(0, 2, 3, 1) == 1
+        self.lastObs = ob[0].numpy()
+        self.stepCnt = 0
         return ob[0].numpy()
 
     def step(self, actions):
@@ -66,13 +71,29 @@ class VecEnvScRandom:
         reallyDone = torch.clamp_min_(isDone - self.isDone, 0)
         self.isDone = isDone
         self.mask = masks[0].permute(0, 2, 3, 1) == 1
+        self.lastObs = obs[0].numpy()
+        self.stepCnt += 1
+        if self.stepCnt >= self.maxSteps:
+            isDone[:] = 1
         return obs[0].numpy(), re[0].numpy(), isDone.numpy(), [{"rewards": float(re[0][i])} for i in range(self.env.num_workers)]
 
     def get_action_mask(self):
         return self.mask.numpy()
 
-    def render(self):
-        pass
+    def render(self, mode="rgb_array"):
+        retVal = np.zeros((GAME_W, GAME_H, 3))
+        a = self.lastObs[0, ObPlane.OWNER_1, :, :]
+        b = self.lastObs[0, ObPlane.OWNER_2, :, :]
+        n = self.lastObs[0, ObPlane.OWNER_NONE, :, :]
+        retVal[:, :, 0] = b
+        retVal[:, :, 1] = a
+        retVal[:, :, 2] = n
+        retVal = (retVal+1)/2 * 255
+        img = plt.imshow(retVal.astype(np.dtype('uint8')))
+        return img.make_image(None)[0][:, :, :-1]
+
+    def close(self):
+        return
 
 
 def make_micro_sc_env(config: Config,
@@ -116,4 +137,4 @@ def make_micro_sc_env(config: Config,
         _,  # additional_win_loss_smoothing_factor,
     ) = astuple(hparams)
     vecEnv = VecEnvSc(n_envs, torch.device("cpu"), 0, False, True, 0, 5, 5, 100)
-    return VecEnvScRandom(vecEnv)
+    return VecEnvScRandom(vecEnv, make_kwargs.get('max_steps'))
