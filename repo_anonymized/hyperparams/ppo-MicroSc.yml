@@ -46,7 +46,7 @@ _microsc_ai: &microsc-ai-defaults
   <<: *microsc-defaults
   n_timesteps: !!float 100e6
   additional_keys_to_log:
-    [microsc_stats, microsc_results, results, action_mask_stats]
+    [rewards]
   env_hyperparams: &microsc-ai-env-defaults
     n_envs: 24
     env_type: microsc
