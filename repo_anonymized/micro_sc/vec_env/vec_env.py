@@ -35,33 +35,35 @@ class VecEnvSc:
         self.num_workers = num_workers
         initParam = InitParam(c_int(GAME_W), c_int(GAME_H), c_int(self.num_workers))
         self.obj.Init(initParam)
-        self.reward_weight1 = torch.tensor([0,           # GAME_TIME
-                               0,           # IS_END
-                               -1000,       # VICTORY_SIDE
-                               2 + 1,       # NEW_WORKER_CNT
-                               1 + 4,       # NEW_LIGHT_CNT
-                               2 + 8,       # NEW_RANGED_CNT
-                               4 + 16,      # NEW_HEAVY_CNT
-                               16,          # NEW_BASE_CNT
-                               6 + 1,       # NEW_BARRACK_CNT
-                               0,           # DEAD_WORKER_CNT
-                               0,           # DEAD_LIGHT_CNT
-                               0,           # DEAD_RANGED_CNT
-                               0,           # DEAD_HEAVY_CNT
-                               0,           # DEAD_BASE_CNT
-                               0,           # DEAD_BARRACK_CNT
-                               2 + 1,       # NEW_WORKER_KILLED
-                               1 + 4,       # NEW_LIGHT_KILLED
-                               2 + 8,       # NEW_RANGED_KILLED
-                               4 + 16,      # NEW_HEAVY_KILLED
-                               16,          # NEW_BASE_KILLED
-                               6 + 1,       # NEW_BARRACK_KILLED
-                               1,           # NEW_NET_INCOME,
-                               1,])         # NEW_HIT_CNT
+        self.reward_weight1 = torch.tensor([
+                               [0,           0,    0],  # GAME_TIME
+                               [0,           0,    0],  # IS_END
+                               [-10,        -1,    0],  # VICTORY_SIDE
+                               [2 + 1,       0,    2],  # NEW_WORKER_CNT
+                               [1 + 4,       0,    1],  # NEW_LIGHT_CNT
+                               [2 + 8,       0,    2],  # NEW_RANGED_CNT
+                               [4 + 16,      0,    4],  # NEW_HEAVY_CNT
+                               [16,          0,   16],  # NEW_BASE_CNT
+                               [6 + 1,       0,    6],  # NEW_BARRACK_CNT
+                               [0,           0,   -2],  # DEAD_WORKER_CNT
+                               [0,           0,   -1],  # DEAD_LIGHT_CNT
+                               [0,           0,   -2],  # DEAD_RANGED_CNT
+                               [0,           0,   -4],  # DEAD_HEAVY_CNT
+                               [0,           0,  -16],  # DEAD_BASE_CNT
+                               [0,           0,   -6],  # DEAD_BARRACK_CNT
+                               [2 + 1,       0,    0],  # NEW_WORKER_KILLED
+                               [1 + 4,       0,    0],  # NEW_LIGHT_KILLED
+                               [2 + 8,       0,    0],  # NEW_RANGED_KILLED
+                               [4 + 16,      0,    0],  # NEW_HEAVY_KILLED
+                               [16,          0,    0],  # NEW_BASE_KILLED
+                               [6 + 1,       0,    0],  # NEW_BARRACK_KILLED
+                               [1,           0,    0],  # NEW_NET_INCOME,
+                               [1,           0,    0],  # NEW_HIT_CNT
+        ])
         self.reward_weight2 = self.reward_weight1.clone()
-        self.reward_weight2[Reward.VICTORY_SIDE] = 1000
-        self.reward_weight1 = self.reward_weight1.reshape(-1, 1).type(torch.FloatTensor)
-        self.reward_weight2 = self.reward_weight2.reshape(-1, 1).type(torch.FloatTensor)
+        self.reward_weight2[Reward.VICTORY_SIDE, :] = self.reward_weight2[Reward.VICTORY_SIDE, :] * (-1)
+        self.reward_weight1 = self.reward_weight1.type(torch.FloatTensor)
+        self.reward_weight2 = self.reward_weight2.type(torch.FloatTensor)
 
         self.seed = seed
         self.isRotSym = isRotSym
@@ -113,8 +115,8 @@ class VecEnvSc:
         reTensor1 = torch.from_numpy(np.ctypeslib.as_array(totalObs.ob1.reward, [self.num_workers, REWARD_SIZE])).type(torch.FloatTensor)
         reTensor2 = torch.from_numpy(np.ctypeslib.as_array(totalObs.ob2.reward, [self.num_workers, REWARD_SIZE])).type(torch.FloatTensor)
         isEnd = reTensor1[:, Reward.IS_END].flatten()
-        re1 = torch.matmul(reTensor1, self.reward_weight1).flatten()
-        re2 = torch.matmul(reTensor2, self.reward_weight2).flatten()
+        re1 = torch.matmul(reTensor1, self.reward_weight1)
+        re2 = torch.matmul(reTensor2, self.reward_weight2)
 
         re1 = re1.detach().to(self.device)
         re2 = re2.detach().to(self.device)

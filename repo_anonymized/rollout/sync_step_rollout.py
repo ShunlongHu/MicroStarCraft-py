@@ -113,12 +113,10 @@ class SyncStepRolloutGenerator(RolloutGenerator):
             fold_in(self.actions, actions, s)
             (
                 self.next_obs,
-                reward,
+                self.rewards[s],
                 self.next_episode_starts,
                 _,
             ) = self.vec_env.step(clamped_actions)
-            num_multi_reward = self.rewards.shape[-1]
-            self.rewards[s] = np.array(reward).repeat(num_multi_reward).reshape(len(reward), num_multi_reward)
             self.next_action_masks = (
                 self.get_action_mask() if self.get_action_mask else None
             )

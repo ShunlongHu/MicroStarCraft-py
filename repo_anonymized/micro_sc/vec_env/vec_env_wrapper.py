@@ -55,7 +55,6 @@ class VecEnvScRandom:
 
     def reset(self):
         ob, masks = self.env.reset()
-        self.isDone = torch.zeros(self.env.num_workers)
         self.opponentMask = masks[1].permute(0, 2, 3, 1)
         self.mask = masks[0].permute(0, 2, 3, 1) == 1
         self.lastObs = ob[0].numpy()
@@ -68,14 +67,12 @@ class VecEnvScRandom:
         result = sample(randActions, self.opponentMask)
         obs, masks, re, isDone, t = self.env.step(actions.permute(0, 3, 1, 2), result.permute(0, 3, 1, 2))
         self.opponentMask = masks[1].permute(0, 2, 3, 1)
-        reallyDone = torch.clamp_min_(isDone - self.isDone, 0)
-        self.isDone = isDone
         self.mask = masks[0].permute(0, 2, 3, 1) == 1
         self.lastObs = obs[0].numpy()
         self.stepCnt += 1
         if self.stepCnt >= self.maxSteps:
             isDone[:] = 1
-        return obs[0].numpy(), re[0].numpy(), isDone.numpy(), [{"rewards": float(re[0][i])} for i in range(self.env.num_workers)]
+        return obs[0].numpy(), re[0].numpy(), isDone.numpy(), [{"rewards": float(re[0][i, 1])} for i in range(self.env.num_workers)]
 
     def get_action_mask(self):
         return self.mask.numpy()
