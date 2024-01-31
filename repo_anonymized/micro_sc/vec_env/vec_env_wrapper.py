@@ -66,7 +66,7 @@ class VecEnvScRandom:
         reallyDone = torch.clamp_min_(isDone - self.isDone, 0)
         self.isDone = isDone
         self.mask = masks[0].permute(0, 2, 3, 1) == 1
-        return obs[0].numpy(), (re[0] * (1-reallyDone)).tolist(), (reallyDone == 1).tolist(), {}
+        return obs[0].numpy(), re[0].numpy(), isDone.numpy(), [{"rewards": float(re[0][i])} for i in range(self.env.num_workers)]
 
     def get_action_mask(self):
         return self.mask.numpy()
